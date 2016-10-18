@@ -7,13 +7,25 @@ The server and client are already capable of communicating. By starting the clie
 
 There are several more features the chat server requires, and it is your task to complete them.
 
-## Structure
+## Setup
+
+### Structure
 
 The Java server can be found in the root of the project. It is a maven project, and can be imported into eclipse as such.
 
 The JavaScript command line client can be found in the `./cli` directory of the project. As with other node projects, you must run `npm install` in the root of the JavaScript project before working with it.
 
+### Build
+
+The Java server can be run from eclipse by running the `com.cooksys.assessment.Main` class.
+
+Incremental (and continuous) JavaScript compilation can be started by running `npm run build:watch` in the `./cli` directory, and the JavaScript client can be started by running `npm start`.
+
 ## Tasks
+
+### UI
+
+Update the `connect` command to accept `host` and `port` arguments so that the cli can connect to other students' projects.
 
 ### Commands
 
@@ -54,3 +66,9 @@ users:
 (repeated)
 `<${username}>`
 ```
+
+## References
+See the `Jackson` Java/JSON library
+
+See the `vorpal` JavaScript/CLI library
+ - Specifically, look at `mode` and `command`
