@@ -22,16 +22,13 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 public class ClientHandler implements Runnable {
 	private Logger log = LoggerFactory.getLogger(ClientHandler.class);
-	//private Map<Message, Socket> users = Collections.synchronizedMap(new HashMap<Message, Socket>());
-	//private ConcurrentLinkedQueue users;
-
-	private int counter = 0;
 	private Socket socket;
 
 	public ClientHandler(Socket socket) {
 		super();
 		this.socket = socket;
 	}
+
 	public void run() {
 		try {
 
@@ -42,16 +39,21 @@ public class ClientHandler implements Runnable {
 			while (!socket.isClosed()) {
 				String raw = reader.readLine();
 				Message message = mapper.readValue(raw, Message.class);
-				
-				for(String x : Server.users.getM()) {
-					if(message.equals(x)) {
-						log.info("user <{}> direct messaged someone");
-						String temp = message.getUsername() + "(direct): ";
-						message.setContents(temp + message.getContents());
-						String dmr = mapper.writeValueAsString(message);
-						PrintWriter writerTemp = new PrintWriter(new OutputStreamWriter(Server.users.getDSocket(x).getOutputStream()));	
-						writerTemp.write(dmr);
-						writerTemp.flush();
+				if(message.getCommand().charAt(0) == ('@')) {
+					for(String x : Server.users.getM()) {
+						if(message.getCommand().substring(1).equals(x)) {
+							log.info("user <{}> direct messaged someone", message.getUsername());
+							String temp = message.getContents();
+							message.setContents("from " + message.getUsername() + " (whisper): " + temp);
+							String dmr = mapper.writeValueAsString(message);
+							PrintWriter writerTemp = new PrintWriter(new OutputStreamWriter(Server.users.getDSocket(x).getOutputStream()));	
+							writerTemp.write(dmr);
+							writerTemp.flush();
+							message.setContents("to " + x + "(whisper): " + temp);
+							dmr = mapper.writeValueAsString(message);
+							writer.write(dmr);
+							writer.flush();
+						}
 					}
 				}
 				
@@ -59,31 +61,50 @@ public class ClientHandler implements Runnable {
 					case "connect":
 						Server.users.add(message.getUsername(), socket);
 						log.info("user <{}> connected", message.getUsername());
+						for(String x : Server.users.getM()) {
+							message.setContents(message.getUsername() + " has connected");
+							String cm = mapper.writeValueAsString(message);
+							PrintWriter writerTemp1 = new PrintWriter(new OutputStreamWriter(Server.users.getDSocket(x).getOutputStream()));	
+							writerTemp1.write(cm);
+							writerTemp1.flush();
+						}
 						break;
 					case "disconnect":
 						log.info("user <{}> disconnected", message.getUsername());
-						Server.users.remove(message.getUsername(), socket);
+						for(String x : Server.users.getM()) {
+							message.setContents(message.getUsername() + " has disconnected");
+							String dm = mapper.writeValueAsString(message);
+							PrintWriter writerTemp2 = new PrintWriter(new OutputStreamWriter(Server.users.getDSocket(x).getOutputStream()));	
+							writerTemp2.write(dm);
+							writerTemp2.flush();
+						}
+						Server.users.remove(message.getUsername());
 						this.socket.close();
 						break;
 					case "echo":
 						log.info("user <{}> echoed message <{}>", message.getUsername(), message.getContents());
+						message.setContents(message.getUsername() + " (echo):" + message.getContents());
 						String response = mapper.writeValueAsString(message);   //returns a string version of a Message format "user:___ , command: ___ etc"
 						writer.write(response);
 						writer.flush();
 						break;
 					case "broadcast":
 						log.info("user <{}> broadcast message <{}>", message.getUsername(), message.getContents());
-						String temp = message.getUsername() + "(all):";
+						String temp = message.getUsername() + " (all):";
 						message.setContents(temp + message.getContents());
 						String br = mapper.writeValueAsString(message);
 
-						for(Socket x : Server.users.getS()) {
-							if(!x.equals(this.socket)) {
-								PrintWriter writerTemp = new PrintWriter(new OutputStreamWriter(x.getOutputStream()));	
-								writerTemp.write(br);
-								writerTemp.flush();
+						if(Server.users.getS().size() > 1) {
+							for(Socket x : Server.users.getS()) {
+								if(!x.equals(this.socket)) {
+									PrintWriter writerTemp = new PrintWriter(new OutputStreamWriter(x.getOutputStream()));	
+									writerTemp.write(br);
+									writerTemp.flush();
+								}
 							}
 						}
+						writer.write(br);
+						writer.flush();
 						break;
 					case "users":
 						log.info("user <{}> requested user list", message.getUsername());
@@ -95,6 +116,11 @@ public class ClientHandler implements Runnable {
 						writer.write(mapper.writeValueAsString(message));
 						writer.flush();
 						break;
+					case "1":
+						message.setContents("command required");
+						String m = mapper.writeValueAsString(message);
+						writer.write(m);
+						writer.flush();
 				}
 			}
 		} catch (IOException e) {

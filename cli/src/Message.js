@@ -16,7 +16,15 @@ export class Message {
       contents: this.contents
     })
   }
-
+  getCommand () {
+    return this.command
+  }
+  setCommand (temp) {
+    this.command = temp
+  }
+  setContent (temp) {
+    this.contents = temp
+  }
   toString () {
     return this.contents
   }
