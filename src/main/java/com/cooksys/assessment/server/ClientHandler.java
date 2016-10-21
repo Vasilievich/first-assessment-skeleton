@@ -6,23 +6,17 @@ import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
 import java.io.PrintWriter;
 import java.net.Socket;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.concurrent.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
 import com.cooksys.assessment.ClientList;
 import com.cooksys.assessment.model.Message;
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 public class ClientHandler implements Runnable {
 	private Logger log = LoggerFactory.getLogger(ClientHandler.class);
 	private Socket socket;
+	private PrintWriter writerTemp = null;
 
 	public ClientHandler(Socket socket) {
 		super();
@@ -39,88 +33,93 @@ public class ClientHandler implements Runnable {
 			while (!socket.isClosed()) {
 				String raw = reader.readLine();
 				Message message = mapper.readValue(raw, Message.class);
-				if(message.getCommand().charAt(0) == ('@')) {
-					for(String x : Server.users.getM()) {
-						if(message.getCommand().substring(1).equals(x)) {
+
+				// Beginning of implementing the @username command. Using if
+				// statement because I'm comparing characters, not strings
+				if (message.getCommand().charAt(0) == ('@')) {
+					System.out.println(message.getContents());
+					if (!Server.users.getU().contains(message.getCommand().substring(1))) {
+						message.setContents("that user is not online");
+						writer.write(mapper.writeValueAsString(message));
+						writer.flush();
+					}
+					for (String x : Server.users.getU()) {
+						if (message.getCommand().substring(1).equals(x)) {
 							log.info("user <{}> direct messaged someone", message.getUsername());
-							String temp = message.getContents();
-							message.setContents("from " + message.getUsername() + " (whisper): " + temp);
-							String dmr = mapper.writeValueAsString(message);
-							PrintWriter writerTemp = new PrintWriter(new OutputStreamWriter(Server.users.getDSocket(x).getOutputStream()));	
-							writerTemp.write(dmr);
+							writerTemp = new PrintWriter(
+									new OutputStreamWriter(Server.users.getDSocket(x).getOutputStream()));
+							writerTemp.write(mapper.writeValueAsString(message));
 							writerTemp.flush();
-							message.setContents("to " + x + "(whisper): " + temp);
-							dmr = mapper.writeValueAsString(message);
-							writer.write(dmr);
+							writer.write(mapper.writeValueAsString(message));
 							writer.flush();
 						}
 					}
 				}
-				
+
 				switch (message.getCommand()) {
-					case "connect":
-						Server.users.add(message.getUsername(), socket);
+				case "connect":
+					if (!Server.users.getU().contains(message.getUsername())) {
 						log.info("user <{}> connected", message.getUsername());
-						for(String x : Server.users.getM()) {
-							message.setContents(message.getUsername() + " has connected");
-							String cm = mapper.writeValueAsString(message);
-							PrintWriter writerTemp1 = new PrintWriter(new OutputStreamWriter(Server.users.getDSocket(x).getOutputStream()));	
-							writerTemp1.write(cm);
-							writerTemp1.flush();
+						Server.users.add(message.getUsername(), socket);
+						for (Socket x : Server.users.getS()) {
+							writerTemp = new PrintWriter(new OutputStreamWriter(x.getOutputStream()));
+							writerTemp.write(mapper.writeValueAsString(message));
+							writerTemp.flush();
 						}
 						break;
-					case "disconnect":
-						log.info("user <{}> disconnected", message.getUsername());
-						for(String x : Server.users.getM()) {
-							message.setContents(message.getUsername() + " has disconnected");
-							String dm = mapper.writeValueAsString(message);
-							PrintWriter writerTemp2 = new PrintWriter(new OutputStreamWriter(Server.users.getDSocket(x).getOutputStream()));	
-							writerTemp2.write(dm);
-							writerTemp2.flush();
-						}
-						Server.users.remove(message.getUsername());
+					} else {
+						log.info("existing username");
+						message.setContents(
+								"username: " + message.getUsername() + " already exists, choose a different username");
+						String existUser = mapper.writeValueAsString(message);
+						writer.write(existUser);
+						writer.flush();
 						this.socket.close();
 						break;
-					case "echo":
-						log.info("user <{}> echoed message <{}>", message.getUsername(), message.getContents());
-						message.setContents(message.getUsername() + " (echo):" + message.getContents());
-						String response = mapper.writeValueAsString(message);   //returns a string version of a Message format "user:___ , command: ___ etc"
-						writer.write(response);
-						writer.flush();
-						break;
-					case "broadcast":
-						log.info("user <{}> broadcast message <{}>", message.getUsername(), message.getContents());
-						String temp = message.getUsername() + " (all):";
-						message.setContents(temp + message.getContents());
-						String br = mapper.writeValueAsString(message);
+					}
 
-						if(Server.users.getS().size() > 1) {
-							for(Socket x : Server.users.getS()) {
-								if(!x.equals(this.socket)) {
-									PrintWriter writerTemp = new PrintWriter(new OutputStreamWriter(x.getOutputStream()));	
-									writerTemp.write(br);
-									writerTemp.flush();
-								}
+				case "disconnect":
+					log.info("user <{}> disconnected", message.getUsername());
+					for (Socket x : Server.users.getS()) {
+						writerTemp = new PrintWriter(new OutputStreamWriter(x.getOutputStream()));
+						writerTemp.write(mapper.writeValueAsString(message));
+						writerTemp.flush();
+					}
+					Server.users.remove(message.getUsername());
+					this.socket.close();
+					break;
+
+				case "echo":
+					log.info("user <{}> echoed message <{}>", message.getUsername(), message.getContents());
+					writer.write(mapper.writeValueAsString(message));
+					writer.flush();
+					break;
+
+				case "broadcast":
+					log.info("user <{}> broadcast message <{}>", message.getUsername(), message.getContents());
+					if (Server.users.getS().size() > 1) {
+						for (Socket x : Server.users.getS()) {
+							if (!x.equals(this.socket)) {
+								writerTemp = new PrintWriter(new OutputStreamWriter(x.getOutputStream()));
+								writerTemp.write(mapper.writeValueAsString(message));
+								writerTemp.flush();
 							}
 						}
-						writer.write(br);
-						writer.flush();
-						break;
-					case "users":
-						log.info("user <{}> requested user list", message.getUsername());
-						String str = "";
-						for(String x : Server.users.getM()) {
-							str += x + '\n';
-						}
-						message.setContents(str);
-						writer.write(mapper.writeValueAsString(message));
-						writer.flush();
-						break;
-					case "1":
-						message.setContents("command required");
-						String m = mapper.writeValueAsString(message);
-						writer.write(m);
-						writer.flush();
+					}
+					writer.write(mapper.writeValueAsString(message));
+					writer.flush();
+					break;
+
+				case "users":
+					log.info("user <{}> requested user list", message.getUsername());
+					String str = message.getContents();
+					for (String x : Server.users.getU()) {
+						str += "\n" + x;
+					}
+					message.setContents(str);
+					writer.write(mapper.writeValueAsString(message));
+					writer.flush();
+					break;
 				}
 			}
 		} catch (IOException e) {

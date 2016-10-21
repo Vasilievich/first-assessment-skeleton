@@ -12,6 +12,7 @@ import org.slf4j.LoggerFactory;
 import com.cooksys.assessment.server.Server;
 // 901 679 7685
 public class Main {
+	
 	private static Logger log = LoggerFactory.getLogger(Main.class);
 
 	public static void main(String[] args) {

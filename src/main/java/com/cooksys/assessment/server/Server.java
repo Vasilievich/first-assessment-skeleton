@@ -15,7 +15,6 @@ import com.cooksys.assessment.model.Message;
 public class Server implements Runnable {
 	public static ClientList users = new ClientList();
 	private Logger log = LoggerFactory.getLogger(Server.class);
-//	public static List<String> users;
 	private int port;
 	private ExecutorService executor;
 	
@@ -40,5 +39,4 @@ public class Server implements Runnable {
 			log.error("Something went wrong :/", e);
 		}
 	}
-
 }
